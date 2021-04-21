@@ -45,7 +45,8 @@ class NN(nn.Module):
             nn.Softmax(dim=1)
         )
         self.decoder_v = nn.Sequential(
-            nn.Linear(hidden_size, 1)
+            nn.Linear(hidden_size, 1),
+            nn.Tanh()
         )
         self.apply(self.init_weight)
     
