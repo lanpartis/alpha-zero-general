@@ -47,9 +47,9 @@ class Arena():
                 assert self.display
                 print("Turn ", str(it), "Player ", str(curPlayer))
                 self.display(board)
-            action = players[curPlayer + 1](self.game.getCanonicalForm(board, curPlayer))
+            action = players[curPlayer + 1](board)
 
-            valids = self.game.getValidMoves(self.game.getCanonicalForm(board, curPlayer), 1)
+            valids = self.game.getValidMoves(board, 1)
 
             if valids[action] == 0:
                 log.error(f'Action {action} is not valid!')
@@ -77,24 +77,32 @@ class Arena():
         oneWon = 0
         twoWon = 0
         draws = 0
-        for _ in tqdm(range(num), desc="Arena.playGames (1)"):
+        t = tqdm(range(num), desc="Arena.playGames (1)")
+        for _ in t:
             gameResult = self.playGame(verbose=verbose)
-            if gameResult == 1:
+            if gameResult >0:
+                log.info('old model wins')
                 oneWon += 1
-            elif gameResult == -1:
+            elif gameResult <0:
+                log.info('new model wins')
                 twoWon += 1
             else:
                 draws += 1
+            t.set_postfix(lastBattle=gameResult, oneWon=oneWon, twoWon=twoWon, draws=draws)
 
         self.player1, self.player2 = self.player2, self.player1
 
-        for _ in tqdm(range(num), desc="Arena.playGames (2)"):
+        t = tqdm(range(num), desc="Arena.playGames (2)")
+        for _ in t:
             gameResult = self.playGame(verbose=verbose)
-            if gameResult == -1:
+            if gameResult < 0:
+                log.info('old model wins')
                 oneWon += 1
-            elif gameResult == 1:
+            elif gameResult > 0:
+                log.info('new model wins')
                 twoWon += 1
             else:
                 draws += 1
+            t.set_postfix(lastBattle=gameResult, oneWon=oneWon, twoWon=twoWon, draws=draws)
 
         return oneWon, twoWon, draws

@@ -1,7 +1,8 @@
+from copy import deepcopy
 import logging
 import os
+from queue import Empty
 import sys
-from collections import deque
 from pickle import Pickler, Unpickler
 from random import shuffle
 
@@ -10,9 +11,60 @@ from tqdm import tqdm
 
 from Arena import Arena
 from MCTS import MCTS
-
 log = logging.getLogger(__name__)
 
+import torch.multiprocessing as mp
+from collections import Counter
+
+def executeEpisode(args):
+    """
+    This function executes one episode of self-play, starting with player 1.
+    As the game is played, each turn is added as a training example to
+    trainExamples. The game is played till the game ends. After the game
+    ends, the outcome of the game is used to assign values to each example
+    in trainExamples.
+
+    It uses a temp=1 if episodeStep < tempThreshold, and thereafter
+    uses temp=0.
+
+    Returns:
+        trainExamples: a list of examples of the form (canonicalBoard, currPlayer, pi,v)
+                        pi is the MCTS informed policy vector, v is +1 if
+                        the player eventually won the game, else -1.
+    """
+    game,nnet,args,data_queue,report_queue = args
+    trainExamples = []
+    game.seed(mp.current_process().pid)
+    board = game.getInitBoard()
+    curPlayer = 1
+    episodeStep = 0
+    mcts = MCTS(game, nnet, args)
+    while True:
+        episodeStep += 1
+        # canonicalBoard = self.game.getCanonicalForm(board, self.curPlayer)
+        temp = int(episodeStep < args.tempThreshold)
+
+        pi = mcts.getActionProb(board, temp=temp)
+        sym = game.getSymmetries(board, pi)
+        for b, p in sym:
+            b = game.getCanonicalForm(b)
+            trainExamples.append([b, curPlayer, p, None])
+
+        action = np.random.choice(len(pi), p=pi)
+        board, curPlayer = game.getNextState(board, curPlayer, action)
+
+        r = game.getGameEnded(board, curPlayer)
+        # log.info(f'currnet round: {board.play_round}')
+        if r != 0:
+            data_queue.put([(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples])
+            for player in board.players:
+                report_queue.put({
+                    'score':player.score,
+                    'cards':sum(player.cards.values()),
+                    'nobles':player.nobles,
+                    'round':board.play_round-1,
+                })
+            return
 
 class Coach():
     """
@@ -22,6 +74,7 @@ class Coach():
 
     def __init__(self, game, nnet, args):
         self.game = game
+        self.game_backup = deepcopy(self.game)
         self.nnet = nnet
         self.pnet = self.nnet.__class__(self.game)  # the competitor network
         self.args = args
@@ -78,21 +131,51 @@ class Coach():
         It then pits the new neural network against the old one and accepts it
         only if it wins >= updateThreshold fraction of games.
         """
-
+        # collector start
+        # collector merge
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
             log.info(f'Starting Iter #{i} ...')
             # examples of the iteration
             if not self.skipFirstSelfPlay or i > 1:
-                iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
-
-                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                    self.mcts = MCTS(self.game, self.nnet, self.args)  # reset search tree
-                    iterationTrainExamples += self.executeEpisode()
-
-                # save the iteration examples to the history 
+                # data_queue = MpQueue(10000)
+                manager = mp.Manager()
+                # 父进程创建Queue，并传给各个子进程：
+                data_queue = manager.Queue(10000)
+                report_queue = manager.Queue(10000)
+                # Collector
+                # Collectors = [mp.Process(target=executeEpisode, args=(self.game, self.nnet, self.args, data_queue)) for _ in range(self.args.numEps)]
+                # for c in Collectors:
+                #     c.start()
+                # for c in Collectors:
+                #     c.join()
+                with mp.Pool(self.args.workers) as p:
+                    bar = tqdm(p.imap_unordered(executeEpisode,[(deepcopy(self.game_backup), self.nnet, self.args, data_queue, report_queue) for _ in range(self.args.numEps)]), total=self.args.numEps)
+                    reports = []
+                    for _ in bar:
+                        while True:
+                            try:
+                                reports.append(report_queue.get_nowait())
+                            except Empty:
+                                break
+                        if len(reports)==0:
+                            continue
+                        keys = reports[0].keys()
+                        cnts = map(Counter,reports)
+                        count = next(cnts)
+                        for cnt in cnts:
+                            count += cnt
+                        report = {}
+                        length = len(reports)
+                        for k in keys:
+                            report[k+'_avg']=count[k]/length
+                        bar.set_postfix(**report)
+                iterationTrainExamples = []
+                while not data_queue.empty():
+                    iterationTrainExamples.extend(data_queue.get())
+                
+                # # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
-
             if len(self.trainExamplesHistory) > self.args.numItersForTrainExamplesHistory:
                 log.warning(
                     f"Removing the oldest entry in trainExamples. len(trainExamplesHistory) = {len(self.trainExamplesHistory)}")
@@ -106,15 +189,13 @@ class Coach():
             for e in self.trainExamplesHistory:
                 trainExamples.extend(e)
             shuffle(trainExamples)
-
+            
             # training new network, keeping a copy of the old one
             self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             pmcts = MCTS(self.game, self.pnet, self.args)
-
             self.nnet.train(trainExamples)
             nmcts = MCTS(self.game, self.nnet, self.args)
-
             log.info('PITTING AGAINST PREVIOUS VERSION')
             arena = Arena(lambda x: np.argmax(pmcts.getActionProb(x, temp=0)),
                           lambda x: np.argmax(nmcts.getActionProb(x, temp=0)), self.game)
@@ -156,4 +237,4 @@ class Coach():
             log.info('Loading done!')
 
             # examples based on the model were already collected (loaded)
-            self.skipFirstSelfPlay = True
+            self.skipFirstSelfPlay = not self.args.load_model

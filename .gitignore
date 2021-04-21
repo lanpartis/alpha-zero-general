@@ -4,10 +4,14 @@
 /temp/
 /.project
 /.pydevproject
-
+.vscode
 # checkpoint
 checkpoints/
 
 # For PyCharm users
 .idea/
 
+# For checkpoints 
+*chkpoints
+*.tar
+*.examples
