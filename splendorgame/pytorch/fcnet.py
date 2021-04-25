@@ -5,15 +5,16 @@ from utils import *
 from tqdm import tqdm
 import numpy as np
 import os
+import torch.nn.functional as F
 
 args = dotdict({
-    'lr': 0.0001,
+    'lr': 1e-4,
     'dropout': 0.3,
-    'epochs': 5,
-    'batch_size': 64,
-    'cuda': False,#torch.cuda.is_available(),
+    'epochs': 20,
+    'batch_size': 128,
+    'cuda': torch.cuda.is_available(),
     'hidden_size': 512,
-    'penalty_weight': 1e-5,
+    'penalty_weight': 1e-3,
 })
 
 class SkipModule(nn.Module):
@@ -21,7 +22,7 @@ class SkipModule(nn.Module):
         super().__init__()
         self.model = model
         self.alpha = alpha
-    
+
     def forward(self, x):
         out = self.model(x)
         out += x*self.alpha
@@ -35,21 +36,21 @@ class NN(nn.Module):
         self.encoder = nn.Sequential(
             nn.Linear(observation_dim, hidden_size),
             nn.ReLU(),
-            SkipModule(nn.Linear(self.hidden_size, self.hidden_size)),
+            nn.Linear(self.hidden_size, self.hidden_size),
             nn.ReLU(),
-            SkipModule(nn.Linear(self.hidden_size, self.hidden_size)),
+            nn.Linear(self.hidden_size, self.hidden_size),
             nn.ReLU(),
+            nn.Linear(self.hidden_size, self.hidden_size),
+            nn.ReLU()
         )
         self.decoder_pi = nn.Sequential(
             nn.Linear(hidden_size, action_dim),
-            nn.Softmax(dim=1)
         )
         self.decoder_v = nn.Sequential(
             nn.Linear(hidden_size, 1),
-            nn.Tanh()
         )
         self.apply(self.init_weight)
-    
+
     def init_weight(self, m):
         if isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight)
@@ -59,7 +60,7 @@ class NN(nn.Module):
         x = self.encoder(x)
         pi = self.decoder_pi(x)
         v = self.decoder_v(x)
-        return pi, v
+        return F.log_softmax(pi, dim=1), torch.tanh(v)
 
 class FCNet(nn.Module):
 
@@ -70,7 +71,7 @@ class FCNet(nn.Module):
         self.nnet = NN(observation_dim, action_dim)
         if args.cuda:
             self.nnet.cuda()
-        self.optimizer = optim.Adam(self.nnet.parameters(),weight_decay=1e-3)
+        self.optimizer = optim.Adam(self.nnet.parameters(),weight_decay=1e-4)
 
 
     def predict(self, x):
@@ -81,8 +82,8 @@ class FCNet(nn.Module):
                 x = x.cuda()
         with torch.no_grad():
             pi, v = self.nnet(x)
-        return pi.cpu().numpy()[0], v.cpu().numpy()[0].item()
-    
+        return torch.exp(pi).cpu().numpy()[0], v.cpu().numpy()[0].item()
+
     def train(self, examples):
         """
         examples: list of examples, each example is of form (board, pi, v)
@@ -130,12 +131,13 @@ class FCNet(nn.Module):
 
     def loss_pi(self, targets, outputs):
         return -torch.sum(targets * outputs) / targets.size()[0]
+        # return -torch.sum(targets * torch.log(torch.clamp(outputs,torch.finfo(outputs.dtype).min))) / targets.size()[0]
 
     def loss_v(self, targets, outputs):
         return torch.sum((targets - outputs.view(-1)) ** 2) / targets.size()[0]
-    
+
     def loss_penalty(self, pi):
-        return -torch.sum(pi*torch.log(pi))
+        return -torch.sum(torch.exp(pi)*pi)
 
     def save_checkpoint(self, folder='checkpoint', filename='checkpoint.pth.tar'):
         filepath = os.path.join(folder, filename)

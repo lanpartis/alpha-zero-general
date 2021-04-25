@@ -90,6 +90,7 @@ class Arena():
                 draws += 1
             t.set_postfix(lastBattle=gameResult, oneWon=oneWon, twoWon=twoWon, draws=draws)
 
+
         self.player1, self.player2 = self.player2, self.player1
 
         t = tqdm(range(num), desc="Arena.playGames (2)")
@@ -104,5 +105,6 @@ class Arena():
             else:
                 draws += 1
             t.set_postfix(lastBattle=gameResult, oneWon=oneWon, twoWon=twoWon, draws=draws)
-
+            if oneWon>=num:
+                return oneWon, twoWon, draws
         return oneWon, twoWon, draws

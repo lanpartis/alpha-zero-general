@@ -108,9 +108,9 @@ class SplendorGame(Game):
         if obs.winner is not None:
             done = 1 if obs.winner == player_game_id else -1
         if obs.winner is None and board.play_round > self.max_round:
-            done = 0.05 * (board.players[player_game_id].score - board.players[1-player_game_id].score)
+            done = 0.1 * (board.players[player_game_id].score - board.players[1-player_game_id].score)
             if board.players[player_game_id].score == board.players[1-player_game_id].score:
-                done = 0.02*(sum(board.players[player_game_id].cards.values()) - sum(board.players[1-player_game_id].cards.values()))
+                done = 0.1 if sum(board.players[player_game_id].cards.values()) > sum(board.players[1-player_game_id].cards.values()) else -0.1
         
         return done
 

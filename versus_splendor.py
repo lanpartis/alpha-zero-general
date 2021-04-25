@@ -6,12 +6,12 @@ from splendor.players.h5 import H5Player
 import numpy as np
 from utils import *
 args = dotdict({
-    'numMCTSSims': 100,          # Number of games moves for MCTS to simulate.
-    'max_round':40,
-    'checkpoint': './splendor_chkpoints_debug/',
+    'numMCTSSims': 1600,          # Number of games moves for MCTS to simulate.
+    'max_round':35,
+    'checkpoint': './splendor_chkpoints/',
     'cpuct':1,
     'load_model': True,
-    'load_folder_file': ('./splendor_chkpoints_debug','best.pth.tar'),
+    'load_folder_file': ('./splendor_chkpoints','best.pth.tar'),
 
 })
 

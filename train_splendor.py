@@ -15,20 +15,20 @@ coloredlogs.install(level='INFO')  # Change this to DEBUG to see more info.
 
 args = dotdict({
     'numIters': 1000,
-    'numEps': 30,              # Number of complete self-play games to simulate during a new iteration.
-    'tempThreshold': 30,        #
+    'numEps': 100,              # Number of complete self-play games to simulate during a new iteration.
+    'tempThreshold': 20,        #
     'updateThreshold': 0.6,     # During arena playoff, new neural net will be accepted if threshold or more of games are won.
     'maxlenOfQueue': 200000,    # Number of game examples to train the neural networks.
-    'numMCTSSims': 50,          # Number of games moves for MCTS to simulate.
+    'numMCTSSims': 1600,          # Number of games moves for MCTS to simulate.
     'arenaCompare': 8,         # Number of games to play during arena play to determine if new net will be accepted.
-    'cpuct': 3,
-    'workers': 4,
-    'max_round': 40,
-    'checkpoint': './splendor_chkpoints_debug/',
-    'load_model': False,
-    'load_folder_file': ('./splendor_chkpoints_debug','checkpoint_2.pth.tar'),
-    'load_examples': False,
-    'load_example_folder_file':('./splendor_chkpoints_debug','checkpoint_0.pth.tar'),
+    'cpuct': 4,
+    'workers': 8,
+    'max_round': 36,
+    'checkpoint': '/home/jiao/rltest/jdata/azsplendor/splendor_chkpoints',
+    'load_model': True,
+    'load_folder_file': ('./splendor_chkpoints','best.pth.tar'),
+    'load_examples': True,
+    'load_example_folder_file':('./splendor_chkpoints','checkpoint_4.pth.tar'),
     'numItersForTrainExamplesHistory': 20,
 
 })

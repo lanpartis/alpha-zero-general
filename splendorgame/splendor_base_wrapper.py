@@ -43,13 +43,14 @@ def good_pick_action(tokens_avail, token_num = 3):
     pick_acts = []
     tocken = np.eye(5)
     if token_num==0:
-        return all_pick_action()
+        return []
         
-    if len(tokens_avail[tokens_avail!=0]) >= 3:
+    if len(tokens_avail[tokens_avail!=0]) >= 3 and token_num>=3:
         for i in range(3):
             for j in range(i + 1, 4):
                 for k in range(j + 1, 5):
                     pick_acts.append((tocken[i] + tocken[j] + tocken[k]).tolist())
+    if token_num>=2:
         for i in range(5):
            pick_acts.append((tocken[i]*2).tolist())
     if token_num==2 or len(tokens_avail[tokens_avail!=0]) == 2:
@@ -60,6 +61,28 @@ def good_pick_action(tokens_avail, token_num = 3):
         for i in range(5):  # 1 个
                 pick_acts.append(tocken[i].tolist())
     return np.array(pick_acts, dtype=np.int)
+    # if token_num==0:
+    #     return all_pick_action()
+    # pick_acts = []
+    # tocken = np.eye(5)
+    # if token_num==0:
+    #     return all_pick_action()
+        
+    # if len(tokens_avail[tokens_avail!=0]) >= 3:
+    #     for i in range(3):
+    #         for j in range(i + 1, 4):
+    #             for k in range(j + 1, 5):
+    #                 pick_acts.append((tocken[i] + tocken[j] + tocken[k]).tolist())
+    #     for i in range(5):
+    #        pick_acts.append((tocken[i]*2).tolist())
+    # if token_num==2 or len(tokens_avail[tokens_avail!=0]) == 2:
+    #     for i in range(5):  # 2 个
+    #         for j in range(i+1, 5):
+    #             pick_acts.append((tocken[i] + tocken[j]).tolist())
+    # if token_num==1 or len(tokens_avail[tokens_avail!=0]) == 1:
+    #     for i in range(5):  # 1 个
+    #             pick_acts.append(tocken[i].tolist())
+    # return np.array(pick_acts, dtype=np.int)
 
 class ActionTransTool:
     """
